@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <meta charset="UTF-8">
+  <title>Title</title>
+  <style> </style>
+</head>
+
+<body>
+  <template id="userCardTemplate">
+    <style>
+      .image {
+        width: 100px;
+      }
+
+      .container {
+        background: #eee;
+        border-radius: 10px;
+        width: 500px;
+        padding: 20px;
+      }
+    </style>
+    <div class="container">
+      <p class="name" data-open="true">{{name}}</p>
+      <p class="email">{{email}}</p> <input type="text" v-model="message"> <span>{{message}}</span> <button
+        class="button">Follow</button>
+    </div>
+  </template>
+  <user-card data-click="123"></user-card>
+  <script type="module">
+    class popEvent {
+      constructor(option) {
+        /** 接收四个参数：* 1，对象的this * 2，要监听的元素 * 3，要监听的事件,默认监听点击事件 * 4，是否冒泡 * */
+        this.eventObj = option.obj;
+        this.target = option.target || this.eventObj;
+        this.eventType = option.eventType || 'click';
+        this.popup = option.popup || false;
+        this.bindEvent();
+      }
+      bindEvent () {
+        let _this = this;
+        _this.target.addEventListener(_this.eventType, function (ev) {
+          let target = ev.target;
+          let dataset, parent, num, b;
+          popup(target);
+          function popup (obj) {
+            if (obj === document) {
+              return false;
+            }
+            dataset = obj.dataset;
+            num = Object.keys(dataset).length;
+            parent = obj.parentNode;
+            if (num < 1) {
+              _this.popup && popup(parent); num = 0;
+            } else {
+              for (b in dataset) {
+                if (_this.eventObj.__proto__[b]) {
+                  _this.eventObj.__proto__[b].call(_this.eventObj,
+                    { obj: obj, ev: ev, target: dataset[b], data: _this.eventObj });
+                }
+              }
+              _this.popup && popup(parent);
+            }
+          }
+        })
+      }
+    }
+    class UserCard extends HTMLElement {
+      constructor() {
+        super();
+        var templateElem = document.getElementById('userCardTemplate');
+        var content = templateElem.content.cloneNode(true);
+        this.appendChild(content);
+        this._data = { name: '用户名', email: 'yourmail@some-email.com', message: '双向' }
+        this.compileNode(this);
+        this.observe(this._data);
+        this.bindEvent();
+        this.addevent = this.__proto__;
+      }
+      bindEvent () {
+        this.event = new popEvent({ obj: this, popup: true });
+      }
+      observe () {
+        let _this = this;
+        this._data = new Proxy(this._data, {
+          set (obj, prop, value) {
+            let event = new CustomEvent(prop, { detail: value });
+            _this.dispatchEvent(event);
+            return Reflect.set(...arguments);
+          }
+        });
+      }
+      compileNode (el) {
+        let child = el.childNodes;
+        [...child].forEach((node) => {
+          if (node.nodeType === 3) {
+            let text = node.textContent;
+            let reg = /\{\{\s*([^\s\{\}]+)\s*\}\}/g;
+            if (reg.test(text)) {
+              let $1 = RegExp.$1;
+              this._data[$1] && (node.textContent = text.replace(reg, this._data[$1]));
+              this.addEventListener($1, (e) => {
+                node.textContent = text.replace(reg, e.detail)
+              })
+            };
+          } else if (node.nodeType === 1) {
+            let attrs = node.attributes;
+            if (attrs.hasOwnProperty('v-model')) {
+              let keyname = attrs['v-model'].nodeValue;
+              node.value = this._data[keyname];
+              node.addEventListener('input', e => {
+                this._data[keyname] = node.value;
+              });
+            }
+            if (node.childNodes.length > 0) {
+              this.compileNode(node);
+            }
+          }
+        })
+      }
+      open () {
+        console.log('触发了open方法');
+      }
+    }
+    window.customElements.define('user-card', UserCard);
+    let card = document.querySelector('user-card');
+    card.addevent['click'] = function () {
+      console.log('触发了点击事件！');
+    }
+  </script>
+</body>
+
+</html>
